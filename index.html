@@ -3367,6 +3367,7 @@ html,body{height:100%;overflow:hidden;background:#E8D9C4;font-family:'Inter',san
         <div class="card" style="margin-bottom:12px">
           <div class="menu-item" onclick="showEditProfile()"><div class="menu-icon-wrap">👤</div><div style="flex:1"><div style="font-size:14px;font-weight:500">Edit Profile</div><div style="font-size:12px;color:var(--cat-muted)">Name, email, phone</div></div><span style="color:var(--cat-muted)">›</span></div>
           <div class="menu-item" onclick="showNotifs()"><div class="menu-icon-wrap">🔔</div><div style="flex:1"><div style="font-size:14px;font-weight:500">Notifications</div><div style="font-size:12px;color:var(--cat-muted)">Promotions & updates</div></div><span style="color:var(--cat-muted)">›</span></div>
+          <div class="menu-item" onclick="enablePushNotifications()"><div class="menu-icon-wrap">📲</div><div style="flex:1"><div style="font-size:14px;font-weight:500">Enable Push Notifications</div><div style="font-size:12px;color:var(--cat-muted)">Get alerts when admin replies</div></div><span style="color:var(--cat-muted)">›</span></div>
           <div class="menu-item" onclick="showScreen('screen-forgot')"><div class="menu-icon-wrap">🔐</div><div style="flex:1"><div style="font-size:14px;font-weight:500">Password & Security</div></div><span style="color:var(--cat-muted)">›</span></div>
         </div>
 
@@ -4432,7 +4433,36 @@ function subscribeCustomerRealtime() {
       const badge = document.querySelector('#bottom-nav .notif-badge');
       if (badge) badge.style.display = 'flex';
     })
+    // ── Admin reply to support request ──
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'support_requests', filter:`user_id=eq.${state.profile.id}` }, payload => {
+      const updated = payload.new;
+      // Only notify if the admin just added a reply
+      if (!payload.old.admin_response && updated.admin_response) {
+        const notif = {
+          id: 'reply-' + updated.id,
+          icon: '💬',
+          title: 'Reply from HEYCAT',
+          body: updated.admin_response,
+          created_at: new Date().toISOString(),
+        };
+        state.notifications.unshift(notif);
+        const badge = document.querySelector('#bottom-nav .notif-badge');
+        if (badge) badge.style.display = 'flex';
+        // Refresh the help screen if it's open
+        if (document.getElementById('screen-help')?.classList.contains('active')) renderMyReports();
+      }
+    })
     .subscribe();
+}
+
+// Called when the user explicitly taps "Enable Notifications" — safe from Chrome's spam filter
+async function enablePushNotifications() {
+  if (!state.profile) return;
+  await requestPushPermission(state.profile.id);
+  // Show feedback
+  if (Notification.permission === 'granted') toast('🔔 Push notifications enabled!');
+  else if (Notification.permission === 'denied') toast('⚠️ Notifications blocked — please allow them in browser settings');
+  else toast('Notification permission not granted');
 }
 
 
@@ -4495,8 +4525,6 @@ window.onload = async function () {
     } else if (event === 'SIGNED_IN' && session?.user) {
       await loadUserData(session.user.id);
       showMainApp();
-      // Request push permission after a short delay so the UI is settled first
-      setTimeout(() => requestPushPermission(session.user.id), 2000);
     } else if (event === 'SIGNED_OUT') {
       state.user = null; state.profile = null;
       state.cart = []; state.orders = []; state.bookings = [];
@@ -4510,7 +4538,6 @@ window.onload = async function () {
   if (session?.user) {
     await loadUserData(session.user.id);
     showMainApp();
-    setTimeout(() => requestPushPermission(session.user.id), 2000);
   }
 };
 </script>
