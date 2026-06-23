@@ -3401,6 +3401,10 @@ html,body{height:100%;overflow:hidden;background:#E8D9C4;font-family:'Inter',san
           <div class="menu-item" onclick="openHelpScreen()"><div class="menu-icon-wrap">❓</div><div style="flex:1"><div style="font-size:14px;font-weight:500">Help & Support</div></div><span style="color:var(--cat-muted)">›</span></div>
         </div>
 
+        <div class="card" style="margin-bottom:12px">
+          <div class="menu-item" onclick="doDeleteAccount()" style="color:#c0392b"><div class="menu-icon-wrap" style="background:rgba(192,57,43,0.08)">🗑️</div><div style="flex:1"><div style="font-size:14px;font-weight:500;color:#c0392b">Delete Account</div><div style="font-size:12px;color:var(--cat-muted)">Permanently remove your data</div></div><span style="color:#c0392b">›</span></div>
+        </div>
+
         <button class="btn-secondary" style="margin-bottom:32px" onclick="doLogout()">Sign Out</button>
       </div>
     </div>
@@ -3586,6 +3590,38 @@ async function doSignup() {
     // Email verification is required — send them to login
     showScreen('screen-login');
     toast('✅ Check your email to confirm your account, then sign in.');
+  }
+}
+
+async function doDeleteAccount() {
+  const confirmed = confirm('⚠️ Delete your account?\n\nThis will permanently remove your profile, points, bookings, and order history. This cannot be undone.');
+  if (!confirmed) return;
+
+  const userId = state.profile?.id;
+  if (!userId) { toast('❌ Not logged in'); return; }
+
+  toast('Deleting account…');
+
+  try {
+    // Delete all customer data
+    await Promise.all([
+      db.from('points_history').delete().eq('customer_id', userId),
+      db.from('notifications').delete().eq('customer_id', userId),
+      db.from('bookings').delete().eq('customer_id', userId),
+      db.from('push_subscriptions').delete().eq('customer_id', userId),
+    ]);
+    // Delete profile last
+    await db.from('profiles').delete().eq('id', userId);
+    // Sign out the auth session
+    await db.auth.signOut();
+
+    state.user = null; state.profile = null;
+    state.cart = []; state.orders = []; state.bookings = [];
+    state.pointsHistory = []; state.notifications = [];
+    toast('✅ Account deleted. Goodbye!');
+    showScreen('screen-splash');
+  } catch (err) {
+    toast('❌ Could not delete account: ' + err.message);
   }
 }
 
