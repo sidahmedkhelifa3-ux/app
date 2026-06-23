@@ -3018,6 +3018,33 @@ html,body{height:100%;overflow:hidden;background:#E8D9C4;font-family:'Inter',san
   </div>
 </div>
 
+<!-- ─── CHANGE PASSWORD (logged-in users) ─── -->
+<div id="screen-change-password" class="screen hidden" style="padding:0">
+  <div style="padding:20px;display:flex;align-items:center;gap:12px;padding-top:52px">
+    <button onclick="showScreen('screen-main');switchTab('profile')" style="border:none;background:none;cursor:pointer;font-size:22px;color:var(--cat-brown)">←</button>
+    <span style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--cat-dark)">Password & Security</span>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:24px 20px">
+    <div style="text-align:center;font-size:48px;margin-bottom:16px">🔐</div>
+    <p style="color:var(--cat-muted);font-size:14px;text-align:center;margin-bottom:28px;line-height:1.6">Choose a new password for your account.</p>
+    <div class="input-group">
+      <label class="input-label">New Password</label>
+      <div style="position:relative">
+        <input class="input-field" type="password" id="change-new-password" placeholder="Min. 6 characters" style="padding-right:44px">
+        <button onclick="togglePass('change-new-password')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;font-size:18px">👁</button>
+      </div>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Confirm New Password</label>
+      <div style="position:relative">
+        <input class="input-field" type="password" id="change-confirm-password" placeholder="Repeat password" style="padding-right:44px">
+        <button onclick="togglePass('change-confirm-password')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;font-size:18px">👁</button>
+      </div>
+    </div>
+    <button class="btn-primary" id="change-pwd-btn" onclick="doChangePassword()">Update Password</button>
+  </div>
+</div>
+
 <!-- ─── HELP & SUPPORT ─── -->
 <div id="screen-help" class="screen hidden" style="padding:0">
   <div style="padding:20px;display:flex;align-items:center;gap:12px;padding-top:52px">
@@ -3099,8 +3126,7 @@ html,body{height:100%;overflow:hidden;background:#E8D9C4;font-family:'Inter',san
               <div id="home-qr-canvas"></div>
             </div>
             <div class="hero-qr-uid" id="home-qr-uid-label">HC-XXXX-XXXX</div>
-            <div class="hero-qr-msg">Show this QR Code to the cashier before ordering to earn points</div>
-            <div class="badge badge-gold" id="home-qr-pts-badge" style="margin-top:10px">⭐ 0 HeyPoints</div>
+            <div class="hero-qr-msg">Show this QR Code to the cashier after ordering to earn points</div>
           </div>
         </div>
       </div>
@@ -3368,7 +3394,7 @@ html,body{height:100%;overflow:hidden;background:#E8D9C4;font-family:'Inter',san
           <div class="menu-item" onclick="showEditProfile()"><div class="menu-icon-wrap">👤</div><div style="flex:1"><div style="font-size:14px;font-weight:500">Edit Profile</div><div style="font-size:12px;color:var(--cat-muted)">Name, email, phone</div></div><span style="color:var(--cat-muted)">›</span></div>
           <div class="menu-item" onclick="showNotifs()"><div class="menu-icon-wrap">🔔</div><div style="flex:1"><div style="font-size:14px;font-weight:500">Notifications</div><div style="font-size:12px;color:var(--cat-muted)">Promotions & updates</div></div><span style="color:var(--cat-muted)">›</span></div>
           <div class="menu-item" onclick="enablePushNotifications()"><div class="menu-icon-wrap">📲</div><div style="flex:1"><div style="font-size:14px;font-weight:500">Enable Push Notifications</div><div style="font-size:12px;color:var(--cat-muted)">Get alerts when admin replies</div></div><span style="color:var(--cat-muted)">›</span></div>
-          <div class="menu-item" onclick="showScreen('screen-forgot')"><div class="menu-icon-wrap">🔐</div><div style="flex:1"><div style="font-size:14px;font-weight:500">Password & Security</div></div><span style="color:var(--cat-muted)">›</span></div>
+          <div class="menu-item" onclick="showScreen('screen-change-password')"><div class="menu-icon-wrap">🔐</div><div style="flex:1"><div style="font-size:14px;font-weight:500">Password & Security</div></div><span style="color:var(--cat-muted)">›</span></div>
         </div>
 
         <div class="card" style="margin-bottom:12px">
@@ -3545,6 +3571,12 @@ async function doSignup() {
       points: 50, orders_count: 0, tier: 'Bronze', role: 'customer'
     });
   }
+  // Log welcome bonus points
+  if (data?.user?.id) {
+    await db.from('points_history').insert({
+      customer_id: data.user.id, type: 'earn', description: 'Welcome bonus', pts: 50
+    });
+  }
   // If Supabase returned an active session (no email verification required),
   // load the app directly — no need to go through the login screen again.
   if (data?.session?.user) {
@@ -3714,6 +3746,10 @@ function showMainApp() {
   if (badge) {
     badge.style.display = state.notifications.length ? 'flex' : 'none';
     badge.textContent = Math.min(state.notifications.length, 9);
+  }
+  // Ask for push permission once the app is visible
+  if (state.profile?.id && Notification.permission === 'default') {
+    setTimeout(() => requestPushPermission(state.profile.id), 1500);
   }
 }
 
@@ -3998,8 +4034,6 @@ function renderQR() {
   renderQRInto('home-qr-canvas', payload, 360);
   const homeUid = document.getElementById('home-qr-uid-label');
   if (homeUid) homeUid.textContent = uid;
-  const homePtsBadge = document.getElementById('home-qr-pts-badge');
-  if (homePtsBadge) homePtsBadge.textContent = '⭐ ' + state.user.points.toLocaleString() + ' HeyPoints';
 }
 
 // Renders a QR code directly into the target container (a div) as inline SVG.
@@ -4474,6 +4508,24 @@ async function enablePushNotifications() {
   else toast('Notification permission not granted');
 }
 
+
+// Change password (logged-in user from profile menu)
+async function doChangePassword() {
+  const newPwd     = document.getElementById('change-new-password')?.value.trim();
+  const confirmPwd = document.getElementById('change-confirm-password')?.value.trim();
+  if (!newPwd || newPwd.length < 6) { toast('Password must be at least 6 characters'); return; }
+  if (newPwd !== confirmPwd) { toast('Passwords do not match'); return; }
+  const btn = document.getElementById('change-pwd-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
+  const { error } = await db.auth.updateUser({ password: newPwd });
+  if (btn) { btn.disabled = false; btn.textContent = 'Update Password'; }
+  if (error) { toast('❌ ' + error.message); return; }
+  document.getElementById('change-new-password').value = '';
+  document.getElementById('change-confirm-password').value = '';
+  toast('✅ Password updated successfully!');
+  showScreen('screen-main');
+  switchTab('profile');
+}
 
 // Reset password (after user clicks link from email and lands on screen-reset-password)
 async function doResetPassword() {
