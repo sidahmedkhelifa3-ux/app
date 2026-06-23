@@ -3545,7 +3545,16 @@ async function doSignup() {
       points: 50, orders_count: 0, tier: 'Bronze', role: 'customer'
     });
   }
-  showScreen('screen-login');
+  // If Supabase returned an active session (no email verification required),
+  // load the app directly — no need to go through the login screen again.
+  if (data?.session?.user) {
+    await loadUserData(data.session.user.id);
+    showMainApp();
+  } else {
+    // Email verification is required — send them to login
+    showScreen('screen-login');
+    toast('✅ Check your email to confirm your account, then sign in.');
+  }
 }
 
 async function doLogout() {
