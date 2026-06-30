@@ -4242,6 +4242,7 @@ async function loadUserData(userId) {
       email:  prof.email  || '',
       phone:  prof.phone  || '',
       points: prof.points || 0,
+      drink_progress: prof.drink_progress || 0,
       orders: prof.orders_count || 0,
       tier:   prof.tier   || 'Bronze',
     };
@@ -4267,6 +4268,7 @@ async function loadUserData(userId) {
       email:  state.profile.email,
       phone:  state.profile.phone,
       points: state.profile.points,
+      drink_progress: state.profile.drink_progress || 0,
       orders: 0,
       tier:   'Bronze',
     };
@@ -4397,7 +4399,9 @@ function renderHome() {
   if (el('home-welcome')) el('home-welcome').textContent = (u.name || 'Guest').split(' ')[0];
 
   // Points bar (DA-based, driven by admin threshold)
-  const pts = u.points || 0;
+  // Uses drink_progress (resets to 0 when staff redeems a free drink) —
+  // NOT points, which is lifetime spend and drives tier separately.
+  const pts = u.drink_progress || 0;
   const freeCoffeeDA = window.FREE_COFFEE_DA || 5000;
   if (el('home-pts'))       el('home-pts').textContent = pts.toLocaleString();
   if (el('home-pts-total')) el('home-pts-total').textContent = pts.toLocaleString();
@@ -5285,6 +5289,17 @@ async function saveProfile() {
 function subscribeCustomerRealtime() {
   if (!state.profile) return;
   db.channel('customer-live-' + state.profile.id)
+    // ── Own profile changes live (points earned, free drink redeemed, tier changes) ──
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'profiles', filter:`id=eq.${state.profile.id}` }, payload => {
+      const p = payload.new;
+      state.profile = p;
+      state.user.points = p.points || 0;
+      state.user.drink_progress = p.drink_progress || 0;
+      state.user.tier = p.tier || 'Bronze';
+      if (state.currentTab === 'home') renderHome();
+      if (state.currentTab === 'journal') renderRewardsTab();
+      if (state.currentTab === 'profile') renderProfile();
+    })
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'orders', filter:`customer_id=eq.${state.profile.id}` }, payload => {
       const i = state.orders.findIndex(o => o.id === payload.new.id);
       if (i !== -1) { Object.assign(state.orders[i], payload.new); }
