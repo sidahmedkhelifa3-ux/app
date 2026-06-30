@@ -3116,6 +3116,10 @@ html,body{height:100%;overflow:hidden;background:#1a0d04;font-family:'Inter',san
 
     <div class="input-group" id="su-email-group"><label class="input-label" data-i18n="email">Email</label><input class="input-field" type="email" id="su-email" placeholder="you@example.com"></div>
     <div class="input-group" id="su-phone-group" style="display:none"><label class="input-label" data-i18n="phone">Phone</label><input class="input-field" type="tel" id="su-phone" placeholder="+213 XX XX XX XX"></div>
+    <div id="su-email-optin-group" style="display:flex;align-items:flex-start;gap:10px;margin:-6px 0 18px">
+      <input type="checkbox" id="su-email-optin" style="margin-top:3px;width:18px;height:18px;flex-shrink:0;accent-color:var(--cat-brown)">
+      <label for="su-email-optin" style="font-size:12.5px;color:var(--cat-muted);line-height:1.5;cursor:pointer" data-i18n="emailOptInLabel">📧 Send me news &amp; special offers by email</label>
+    </div>
     <div class="input-group">
       <label class="input-label" data-i18n="password">Password</label>
       <div class="input-wrap"><input class="input-field" type="password" id="su-pass" placeholder="Min 8 characters"><span class="input-icon" onclick="togglePass('su-pass')">👁️</span></div>
@@ -3293,7 +3297,7 @@ html,body{height:100%;overflow:hidden;background:#1a0d04;font-family:'Inter',san
       <div style="flex:1;padding-right:12px">
         <div style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:3px">HEY CAT Coffee Shop</div>
         <div style="font-size:12px;color:#666;line-height:1.5;margin-bottom:5px" data-i18n="storeAddress">Hydra, Algiers, Algeria<br>Algeria's first cat coffee shop ☕</div>
-        <div style="font-size:13px;font-weight:700;color:#1a1a1a">0.00 km <span style="color:#27ae60;font-weight:700" data-i18n="openLabel">| OPEN</span> <span data-i18n="untilLabel">until</span> 00:00</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a"><span style="color:#27ae60;font-weight:700" data-i18n="openLabel">| OPEN</span> <span data-i18n="untilLabel">until</span> 00:00</div>
       </div>
       <div style="color:#999;font-size:20px;flex-shrink:0">›</div>
     </div>
@@ -3351,7 +3355,7 @@ html,body{height:100%;overflow:hidden;background:#1a0d04;font-family:'Inter',san
       </a>
       <!-- Distance + status -->
       <div style="font-size:14px;font-weight:700;color:#1a1a1a">
-        0.00 km <span style="color:#27ae60;font-weight:700" data-i18n="openLabel">| OPEN</span> <span data-i18n="untilLabel">until</span> 00:00
+        <span style="color:#27ae60;font-weight:700" data-i18n="openLabel">| OPEN</span> <span data-i18n="untilLabel">until</span> 00:00
       </div>
     </div>
 
@@ -3864,7 +3868,7 @@ html,body{height:100%;overflow:hidden;background:#1a0d04;font-family:'Inter',san
         <div style="flex:1;padding-right:12px">
           <div style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:3px">HEY CAT Coffee Shop</div>
           <div style="font-size:12px;color:#666;line-height:1.5;margin-bottom:5px" data-i18n="storeAddress">Hydra, Algiers, Algeria<br>Algeria's first cat coffee shop ☕</div>
-          <div style="font-size:13px;font-weight:700;color:#1a1a1a">0.00 km <span style="color:#27ae60;font-weight:700" data-i18n="openLabel">| OPEN</span> <span data-i18n="untilLabel">until</span> 00:00</div>
+          <div style="font-size:13px;font-weight:700;color:#1a1a1a"><span style="color:#27ae60;font-weight:700" data-i18n="openLabel">| OPEN</span> <span data-i18n="untilLabel">until</span> 00:00</div>
         </div>
         <div style="color:#999;font-size:20px;flex-shrink:0">›</div>
       </div>
@@ -4078,10 +4082,13 @@ function setSignupMethod(method) {
   const phoneBtn   = document.getElementById('su-method-phone-btn');
   const emailGroup = document.getElementById('su-email-group');
   const phoneGroup = document.getElementById('su-phone-group');
+  const optinGroup = document.getElementById('su-email-optin-group');
   if (emailBtn)   emailBtn.classList.toggle('active', method === 'email');
   if (phoneBtn)   phoneBtn.classList.toggle('active', method === 'phone');
   if (emailGroup) emailGroup.style.display = method === 'email' ? '' : 'none';
   if (phoneGroup) phoneGroup.style.display = method === 'phone' ? '' : 'none';
+  // No real email on a phone signup, so the opt-in makes no sense there
+  if (optinGroup) optinGroup.style.display = method === 'email' ? 'flex' : 'none';
 }
 
 // Turns a phone number into a stable, valid synthetic email so Supabase's
@@ -4111,6 +4118,9 @@ async function doSignup() {
 
   let email = '';
   let phone = '';
+  // Only meaningful for real-email signups — phone accounts have no
+  // real email address to send anything to.
+  const emailOptIn = signupMethod === 'email' && !!document.getElementById('su-email-optin')?.checked;
 
   if (signupMethod === 'phone') {
     phone = document.getElementById('su-phone').value.trim();
@@ -4126,7 +4136,7 @@ async function doSignup() {
   setAuthLoading('signup-btn', true);
   const { data, error } = await db.auth.signUp({
     email, password: pass,
-    options: { data: { name, phone } }
+    options: { data: { name, phone, email_opt_in: emailOptIn } }
   });
   setAuthLoading('signup-btn', false);
   if (error) { toast('❌ ' + error.message); return; }
@@ -4136,7 +4146,7 @@ async function doSignup() {
   if (data?.user?.id) {
     await db.from('profiles').upsert({
       id: data.user.id, name, email: signupMethod === 'phone' ? '' : email, phone,
-      points: 50, orders_count: 0, tier: 'Bronze', role: 'customer'
+      points: 50, orders_count: 0, tier: 'Bronze', role: 'customer', email_opt_in: emailOptIn
     });
   }
   // Log welcome bonus points
@@ -4178,6 +4188,7 @@ async function doDeleteAccount() {
     await db.from('profiles').delete().eq('id', userId);
     // Sign out the auth session
     await db.auth.signOut();
+    if (customerRealtimeChannel) { db.removeChannel(customerRealtimeChannel); customerRealtimeChannel = null; }
 
     state.user = null; state.profile = null;
     state.cart = []; state.orders = []; state.giftCards = [];
@@ -4191,6 +4202,7 @@ async function doDeleteAccount() {
 
 async function doLogout() {
   await db.auth.signOut();
+  if (customerRealtimeChannel) { db.removeChannel(customerRealtimeChannel); customerRealtimeChannel = null; }
   state.user = null; state.profile = null;
   state.cart = []; state.orders = []; state.giftCards = [];
   state.homePosts = []; state.pointsHistory = []; state.notifications = [];
@@ -4209,13 +4221,12 @@ function setAuthLoading(btnId, loading) {
 // LOAD USER DATA FROM SUPABASE
 // ════════════════════════════════════════
 async function loadUserData(userId) {
-  // Profile (needed first to decide whether to create one)
-  const { data: prof } = await db.from('profiles').select('*').eq('id', userId).single();
-
-  // Kick off all independent reads in parallel — they don't depend on
-  // the profile or on each other, so there's no reason to wait for one
-  // before starting the next.
+  // Run the profile fetch in parallel with everything else — nothing here
+  // depends on `prof` until after this batch resolves, so there's no
+  // reason to wait for it first. This removes one full network round trip
+  // from the sign-in path.
   const [
+    profRes,
     menuRes,
     milestonesRes,
     ordersRes,
@@ -4225,6 +4236,7 @@ async function loadUserData(userId) {
     settingRes,
     notifsRes,
   ] = await Promise.all([
+    db.from('profiles').select('*').eq('id', userId).single(),
     db.from('menu_items').select('*').order('cat').order('name'),
     db.from('milestones').select('*').order('sort_order').order('pts'),
     db.from('orders').select('*, order_items(name, qty, price)').eq('customer_id', userId).order('created_at', { ascending: false }).limit(50),
@@ -4234,6 +4246,7 @@ async function loadUserData(userId) {
     db.from('app_settings').select('value').eq('key', 'free_coffee_da').single(),
     db.from('notifications').select('*').or(`customer_id.eq.${userId},customer_id.is.null`).order('created_at', { ascending: false }).limit(20),
   ]);
+  const prof = profRes.data;
 
   if (prof) {
     state.profile = prof;
@@ -4260,6 +4273,7 @@ async function loadUserData(userId) {
       orders_count: 0,
       tier:   'Bronze',
       role:   'customer',
+      email_opt_in: !!meta.email_opt_in,
     };
     const { data: created } = await db.from('profiles').upsert(newProf).select().single();
     state.profile = created || newProf;
@@ -5286,9 +5300,19 @@ async function saveProfile() {
 }
 
 // Realtime subscription for customer app
+// Tracks the single active realtime channel so it can be properly torn down
+// on logout instead of leaking a duplicate subscription on every sign-in.
+let customerRealtimeChannel = null;
+
 function subscribeCustomerRealtime() {
   if (!state.profile) return;
-  db.channel('customer-live-' + state.profile.id)
+  // Guard against ever double-subscribing (e.g. sign in -> out -> in again
+  // without a full page reload) — always clear any previous channel first.
+  if (customerRealtimeChannel) {
+    db.removeChannel(customerRealtimeChannel);
+    customerRealtimeChannel = null;
+  }
+  customerRealtimeChannel = db.channel('customer-live-' + state.profile.id)
     // ── Own profile changes live (points earned, free drink redeemed, tier changes) ──
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'profiles', filter:`id=eq.${state.profile.id}` }, payload => {
       const p = payload.new;
@@ -5437,6 +5461,7 @@ const TRANSLATIONS = {
     fullName: 'Full Name',
     phone: 'Phone',
     email: 'Email',
+    emailOptInLabel: '📧 Send me news & special offers by email',
     createMyAccount: 'Create My Account',
     haveAccount: 'Have an account?',
     // Home
@@ -5628,6 +5653,7 @@ const TRANSLATIONS = {
     fullName: 'الاسم الكامل',
     phone: 'رقم الهاتف',
     email: 'البريد الإلكتروني',
+    emailOptInLabel: '📧 أرسل لي الأخبار والعروض الخاصة عبر البريد الإلكتروني',
     createMyAccount: 'إنشاء حسابي',
     haveAccount: 'لديك حساب؟',
     // Home
@@ -6149,9 +6175,18 @@ window.onload = async function () {
       // User clicked the reset link — show the "set new password" screen
       showScreen('screen-reset-password');
     } else if (event === 'SIGNED_IN' && session?.user) {
-      await loadUserData(session.user.id);
+      try {
+        await loadUserData(session.user.id);
+      } catch (err) {
+        // Don't let one failed query silently freeze the user on the
+        // login screen forever — log it, tell them, and still show the
+        // app with whatever data did load successfully.
+        console.error('[HEYCAT] loadUserData failed:', err);
+        toast('⚠️ Some data failed to load — pull to refresh if anything looks empty');
+      }
       showMainApp();
     } else if (event === 'SIGNED_OUT') {
+      if (customerRealtimeChannel) { db.removeChannel(customerRealtimeChannel); customerRealtimeChannel = null; }
       state.user = null; state.profile = null;
       state.cart = []; state.orders = []; state.giftCards = [];
       state.homePosts = []; state.pointsHistory = []; state.notifications = [];
@@ -6162,7 +6197,12 @@ window.onload = async function () {
   // Also check if already logged in
   const { data: { session } } = await db.auth.getSession();
   if (session?.user) {
-    await loadUserData(session.user.id);
+    try {
+      await loadUserData(session.user.id);
+    } catch (err) {
+      console.error('[HEYCAT] loadUserData failed:', err);
+      toast('⚠️ Some data failed to load — pull to refresh if anything looks empty');
+    }
     showMainApp();
   }
 };
